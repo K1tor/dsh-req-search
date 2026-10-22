@@ -194,7 +194,13 @@ const originalFetch = globalThis.fetch
 
 test('the declared routes are exact matches at the documented paths', () => {
   const { routes } = mount()
-  assert.deepEqual([...routes.keys()].sort(), ['/dsh-req-search/status', '/dsh-req-search/style', '/dsh-req-search/style/events'].sort())
+  assert.deepEqual([...routes.keys()].sort(), [
+    '/dsh-req-search/control',
+    '/dsh-req-search/status',
+    '/dsh-req-search/status/events',
+    '/dsh-req-search/style',
+    '/dsh-req-search/style/events',
+  ].sort())
   for (const definition of routes.values()) assert.equal(definition.kind, 'exact')
 })
 
@@ -217,13 +223,14 @@ test('the status route reports what the engine did in the background', async () 
   const mounted = mount({ search: web.search })
   const before = await call(statusRoute(mounted), fakeRequest({ method: 'GET' }))
   assert.equal(before.status, 200)
-  assert.equal(before.body.entries.length, 0)
+  assert.equal(before.body.recent.length, 0)
+  assert.equal(before.body.live.length, 0)
 
   await firePreStep(mounted, [userMessage('我需要你做一个模拟经营游戏')])
   const after = await call(statusRoute(mounted), fakeRequest({ method: 'GET' }))
-  assert.equal(after.body.entries.length, 1)
-  assert.equal(after.body.entries[0].ok, true)
-  assert.match(after.body.entries[0].requirement, /模拟经营/u)
+  assert.equal(after.body.recent.length, 1)
+  assert.match(after.body.recent[0].requirement, /模拟经营/u)
+  assert.equal(after.body.recent[0].injected, true)
 })
 
 test('a game requirement produces association angles, not one keyword query', async () => {
@@ -371,7 +378,7 @@ test('the contract stays silent for an agent that cannot see the tool', () => {
 test('a host without a prompt registry still mounts the tools', () => {
   const { tools, routes } = mount({ withPrompt: false })
   assert.deepEqual([...tools.keys()].sort(), ['ask_style', 'recall_project', 'research_requirement', 'vet_dependency'])
-  assert.equal(routes.size, 3)
+  assert.equal(routes.size, 5)
 })
 
 test('the contract tells the model to state the angle ceiling', () => {

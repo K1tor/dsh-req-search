@@ -1,7 +1,7 @@
 {
   "name": "dsh-req-search",
-  "version": "0.1.0",
-  "description": "DSH 后台项目研究引擎：用户像许愿一样说出需求，引擎自动在后台调研并把结果交给 Agent；仓库许可证/维护状态与依赖安全公告一并核查；只有风格决策才回到界面",
+  "version": "0.2.0",
+  "description": "DSH 全局项目研究引擎：挂在 agent/pre-step 公共执行层，任何入口的开发任务都会自动在后台调研同类项目、开源实现、官方文档与已知问题，把结论注入 Agent 上下文；项目研究面板只是它的观察窗口",
   "type": "module",
   "main": "lib/host.js",
   "exports": {
@@ -20,11 +20,15 @@
     "dsh-plugin",
     "deepseek-harness",
     "research",
-    "search"
+    "search",
+    "global",
+    "agent-context"
   ],
   "license": "MIT",
   "scripts": {
-    "test": "node test/run.mjs && node test/associate.test.mjs && node test/style-store.test.mjs && node test/tool.test.mjs && node test/enrich.test.mjs && node test/vet.test.mjs && node test/memory.test.mjs && node test/wish.test.mjs && node test/host.test.mjs"
+    "test": "node test/all.mjs",
+    "test:engine": "node test/engine.test.mjs",
+    "test:integration": "node test/integration.test.mjs"
   },
   "dsh": {
     "bundle": {

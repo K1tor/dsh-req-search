@@ -146,7 +146,10 @@ function checkSubset(schema, path = 'schema') {
 
 test('registered tool schemas satisfy the registry subset', async () => {
   const tools = await registeredTools()
-  assert.deepEqual([...tools.keys()].sort(), ['ask_style', 'research_requirement', 'vet_dependency'])
+  // `recall_project` is registered here too: it used to be gated on a second
+  // `ctx.get('tools')` probe, which a host that does inject the registry never
+  // needs — and which left the tool missing on exactly the hosts that had it.
+  assert.deepEqual([...tools.keys()].sort(), ['ask_style', 'recall_project', 'research_requirement', 'vet_dependency'])
   for (const [name, entry] of tools) {
     const parameters = {
       type: 'object',

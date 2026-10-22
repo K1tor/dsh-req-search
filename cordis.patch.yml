@@ -2,15 +2,35 @@
     - id: dsh-req-search
       name: 'dsh-req-search'
       config:
-        # Sources kept per association angle.
+        # Whether the background pass runs at all. On by default: the engine is
+        # a harness-wide capability, not a page the user opens.
+        background: true
+        # Sources kept per research angle.
         maxResults: 8
-        # Association angles searched (1–6); the panel may ask for fewer.
+        # Angles per run (1-6).
         maxAngles: 4
         # One provider call's budget, in milliseconds.
         timeoutMs: 20000
-        # Angles searched concurrently (1–6).
+        # Whole-run budget. The step never waits longer than `blockMs` for a run;
+        # this is the point where the run itself gives up and degrades.
+        deadlineMs: 45000
+        # How long one agent step may wait for research before proceeding.
+        # The run continues and its result is injected at the next step.
+        blockMs: 12000
+        # Angles searched concurrently (1-6).
         concurrency: 3
         # Repositories annotated with licence, maintenance and popularity (0 disables).
         enrich: 8
         # Allow the keyless Bing RSS fallback after the first two providers fail.
         fallback: true
+        # Runs kept for the panel.
+        historySize: 40
+        # Runs that may be in flight across all agents at once.
+        maxInflight: 2
+        # A task researched for the same project within this window is reused
+        # instead of searched again (subagents share the parent's work).
+        cacheTtlMs: 21600000
+        # Entries kept in the duplicate-key cache.
+        cacheEntries: 64
+        # Share an identical in-flight run instead of starting a second one.
+        dedupe: true
