@@ -1,0 +1,14 @@
+# The plugin's sources are checked out on Windows, but the line endings that
+# matter are the ones in the repository: a CRLF conversion would rewrite every
+# source file's bytes and break the "this file is a patch" reading of
+# cordis.patch.yml. Pin them to LF.
+* text=auto eol=lf
+
+*.js text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+LICENSE text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf

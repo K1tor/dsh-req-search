@@ -1,0 +1,9 @@
+# The engine's project-memory note: a runtime artefact of using this
+# plugin on a project, not source. It is meant to live in the project it
+# describes, and a repository should not carry another project's note.
+.dsh/
+
+# Dependencies and build output.
+node_modules/
+*.log
+.DS_Store
