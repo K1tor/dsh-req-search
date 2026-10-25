@@ -46,8 +46,10 @@ test('formatStars renders a compact count', () => {
 test('maintenanceLabel describes how recently a repository moved', () => {
   const now = Date.parse('2026-10-01T00:00:00Z')
   assert.equal(maintenanceLabel('2026-09-25T00:00:00Z', now), 'active')
-  assert.equal(maintenanceLabel('2026-01-01T00:00:00Z', now), 'stale (>1y)')
-  assert.equal(maintenanceLabel('2024-01-01T00:00:00Z', now), 'unmaintained (>2y)')
+  // 91 days: stale, and the label states its own threshold.
+  assert.equal(maintenanceLabel('2026-07-02T00:00:00Z', now), 'stale (>90d)')
+  // A full year elapsed: unmaintained, not "stale (>1y)".
+  assert.equal(maintenanceLabel('2025-09-30T00:00:00Z', now), 'unmaintained (>1y)')
   assert.equal(maintenanceLabel('nonsense', now), '')
 })
 

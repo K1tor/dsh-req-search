@@ -82,19 +82,43 @@ test('fetchAdvisories reports the known advisories', async () => {
       async json() { return { vulns: [{ id: 'GHSA-1', summary: 'ReDoS' }] } },
     }
   }
-  const advisories = await fetchAdvisories('lodash', { fetchImpl })
-  assert.equal(advisories.length, 1)
-  assert.equal(advisories[0].id, 'GHSA-1')
+  const outcome = await fetchAdvisories('lodash', { fetchImpl })
+  assert.equal(outcome.checked, true)
+  assert.equal(outcome.advisories.length, 1)
+  assert.equal(outcome.advisories[0].id, 'GHSA-1')
 })
 
-test('fetchAdvisories returns an empty list when nothing is known', async () => {
+test('fetchAdvisories scopes the query to the registry version', async () => {
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body)
+    assert.equal(body.version, '4.19.2')
+    return { ok: true, status: 200, async json() { return { vulns: [] } } }
+  }
+  const outcome = await fetchAdvisories('lodash', { fetchImpl, version: '4.19.2' })
+  assert.equal(outcome.checked, true)
+  assert.deepEqual(outcome.advisories, [])
+})
+
+test('fetchAdvisories reports an empty list when nothing is known', async () => {
   const fetchImpl = async () => ({ ok: true, status: 200, async json() { return { vulns: [] } } })
-  assert.deepEqual(await fetchAdvisories('clean', { fetchImpl }), [])
+  const outcome = await fetchAdvisories('clean', { fetchImpl })
+  assert.equal(outcome.checked, true, 'an empty answer is a successful check')
+  assert.deepEqual(outcome.advisories, [])
 })
 
-test('fetchAdvisories fails soft on a network fault', async () => {
-  const fetchImpl = async () => { throw new Error('offline') }
-  assert.deepEqual(await fetchAdvisories('x', { fetchImpl }), [])
+test('fetchAdvisories distinguishes a failed lookup from a clean one', async () => {
+  const httpError = async () => ({ ok: false, status: 503, async json() { return {} } })
+  const failed = await fetchAdvisories('x', { fetchImpl: httpError })
+  assert.equal(failed.checked, false)
+  assert.equal(failed.reason, 'HTTP_503')
+  const badBody = async () => ({ ok: true, status: 200, async json() { return { unexpected: true } } })
+  const malformed = await fetchAdvisories('x', { fetchImpl: badBody })
+  assert.equal(malformed.checked, false)
+  assert.equal(malformed.reason, 'unexpected-body')
+  const offline = async () => { throw new Error('fetch failed') }
+  const unreachable = await fetchAdvisories('x', { fetchImpl: offline })
+  assert.equal(unreachable.checked, false)
+  assert.equal(unreachable.reason, 'unreachable')
 })
 
 test('vetPackage combines the registry facts and the advisories', async () => {
@@ -106,9 +130,25 @@ test('vetPackage combines the registry facts and the advisories', async () => {
   }
   const verdict = await vetPackage('p', { fetchImpl })
   assert.equal(verdict.checked, true)
+  assert.equal(verdict.advisoriesChecked, true)
   assert.equal(verdict.license, 'ISC')
   assert.equal(verdict.vulnerable, true)
   assert.equal(verdict.advisories.length, 1)
+})
+
+test('a failed advisory lookup is an unknown, never a clean bill of health', async () => {
+  const fetchImpl = async (url) => {
+    if (String(url).includes('osv.dev')) {
+      return { ok: false, status: 500, async json() { return {} } }
+    }
+    return { ok: true, status: 200, async json() { return { name: 'p', version: '2.0.0', license: 'MIT' } } }
+  }
+  const verdict = await vetPackage('p', { fetchImpl })
+  assert.equal(verdict.checked, true, 'the registry was read')
+  assert.equal(verdict.advisoriesChecked, false, 'the advisory database was not')
+  assert.equal(verdict.vulnerable, undefined)
+  assert.equal(verdict.advisories.length, 0)
+  assert.match(formatVerdict(verdict), /advisories not checked/u)
 })
 
 test('formatVerdict puts the licence and advisories first', () => {
