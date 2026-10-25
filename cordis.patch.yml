@@ -5,6 +5,14 @@
         # Whether the background pass runs at all. On by default: the engine is
         # a harness-wide capability, not a page the user opens.
         background: true
+        # Search level is selected per task: 0 off, 1 light, 2 standard, 3 deep.
+        # This is a ceiling, not a fixed number of rounds.
+        maxLevel: 3
+        progressive: true
+        maxSearchCalls: 12
+        # Observable context/network budgets; DSH exposes no pre-step token counter.
+        contextChars: 10000
+        maxSourceChars: 500
         # Sources kept per research angle.
         maxResults: 8
         # Angles per run (1-6).

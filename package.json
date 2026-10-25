@@ -1,7 +1,7 @@
 {
   "name": "dsh-req-search",
-  "version": "0.2.0",
-  "description": "DSH 全局项目研究引擎：挂在 agent/pre-step 公共执行层，任何入口的开发任务都会自动在后台调研同类项目、开源实现、官方文档与已知问题，把结论注入 Agent 上下文；项目研究面板只是它的观察窗口",
+  "version": "0.3.0",
+  "description": "DSH 全局需求检索与方案复用：按任务价值和复杂度动态控制搜索深度与可观测预算，把核验后的参考结论注入 Agent 工作流。", 
   "type": "module",
   "main": "lib/host.js",
   "exports": {

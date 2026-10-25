@@ -235,7 +235,7 @@ test('the status route reports what the engine did in the background', async () 
 
 test('a game requirement produces association angles, not one keyword query', async () => {
   const web = stubWeb()
-  const mounted = mount({ search: web.search })
+  const mounted = mount({ search: web.search, config: { progressive: false } })
   const result = await research(mounted, '我需要你做一个模拟经营游戏')
   assert.equal(result.ok, true)
   assert.equal(result.domain, 'game')
@@ -255,7 +255,7 @@ test('a source relevant to two angles records both', async () => {
       return { sources: [{ url: call <= 2 ? 'https://shared.example/1' : `https://other.example/${call}` }], truncated: false }
     },
   })
-  const result = await research(mounted, '我需要你做一个模拟经营游戏')
+  const result = await research(mounted, '我需要你做一个模拟经营游戏', { progressive: false })
   const shared = result.sources.find((source) => source.url === 'https://shared.example/1')
   assert.deepEqual(shared.angles, ['similar', 'reference'])
   assert.equal(result.sources.length, 3)
@@ -437,7 +437,7 @@ test('research_requirement returns a briefing the model can fold in', async () =
   const value = await definition.execute({ requirement: '我需要你做一个模拟经营游戏' }, { signal: undefined })
   assert.equal(value.ok, true)
   assert.equal(value.domain, 'game')
-  assert.equal(value.sourceCount, 4)
+  assert.equal(value.sourceCount, 1, 'light search stops after a useful first result')
   assert.match(value.briefing, /Requirement research/u)
   assert.match(value.briefing, /## similar/u)
   assert.match(value.briefing, /https:\/\/hit\.example/u)

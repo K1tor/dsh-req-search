@@ -195,8 +195,8 @@ test('a research run produces angles, sources, conclusions and a briefing', asyn
   const restore = stubFetch()
   try {
     const ctx = stubCtx()
-    const engine = engineFor({ ctx })
-    const completed = await engine.research(request('我需要你做一个模拟经营游戏，要能存档'))
+    const engine = engineFor({ ctx, config: { progressive: false } })
+    const completed = await engine.research(request('我需要你做一个模拟经营游戏，要能存档', { level: 3 }))
     assert.equal(completed.ok, true)
     assert.equal(completed.status, 'done')
     assert.equal(completed.angles.length, 3)
@@ -405,7 +405,7 @@ test('one dead angle does not take the whole run down', async () => {
     }
     const engine = createResearchEngine({
       ctx,
-      config: { maxAngles: 3, deadlineMs: 4000, fallback: false },
+      config: { maxAngles: 3, deadlineMs: 4000, fallback: false, progressive: false },
       readProjectFacts: existingProject,
     })
     const completed = await engine.research(request('写一个带鉴权的 REST API 服务'))
