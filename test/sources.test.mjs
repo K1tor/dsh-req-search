@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 
 import {
   anglesUndifferentiated,
+  describeFailure,
   filterSources,
   formatBriefing,
   scoreSource,
@@ -152,6 +153,18 @@ test('the briefing admits a provider that ignored the queries', () => {
   })
   assert.match(briefing, /Every angle returned the same result set/u)
   assert.match(briefing, /dropped for sharing nothing/u)
+})
+
+test('provider failures reduce to stable tags, with timeouts distinct from cancellations', () => {
+  assert.equal(describeFailure(new Error('BING_MALFORMED: the answer was not an RSS document')), 'BING_MALFORMED')
+  assert.equal(describeFailure(new Error('Bing answered HTTP 503')), 'HTTP_503')
+  assert.equal(describeFailure(new Error('search has no API key for "X"')), 'NO_API_KEY')
+  // The deadline signal arrives as an abort, but it is a latency fact, not a
+  // cancellation fact; the record keeps the two apart.
+  const timeout = new Error('The operation was aborted due to timeout')
+  timeout.name = 'TimeoutError'
+  assert.equal(describeFailure(timeout), 'TIMEOUT')
+  assert.equal(describeFailure(new Error('research run cancelled')), 'research run cancelled')
 })
 
 let failed = 0

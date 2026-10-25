@@ -178,6 +178,30 @@ function stubBing(items) {
   return seen
 }
 
+/**
+ * Stub global fetch with a *sequence* of Bing bodies: the first fetch reads
+ * bodies[0], the second bodies[1], and the last body repeats afterwards.
+ * @param {Array<string>} bodies - raw response bodies in fetch order.
+ * @returns {string[]} the URLs fetch was called with.
+ */
+function stubBingSequence(bodies) {
+  const seen = []
+  globalThis.fetch = async (url) => {
+    seen.push(String(url))
+    const body = seen.length <= bodies.length ? bodies[seen.length - 1] : bodies[bodies.length - 1]
+    return { ok: true, status: 200, async text() { return body } }
+  }
+  return seen
+}
+
+/** One Bing RSS document carrying the given items. */
+function bingFeed(items) {
+  const body = items
+    .map((item) => `<item><title>${item.title}</title><link>${item.url}</link><description>${item.snippet ?? ''}</description></item>`)
+    .join('')
+  return `<rss><channel>${body}</channel></rss>`
+}
+
 /** A stubbed ctx.web search that records queries and returns one source each. */
 function stubWeb(result = undefined) {
   const calls = []
@@ -294,6 +318,54 @@ test('Bing RSS backs up the other two providers', async () => {
     const result = await research(mounted, '我需要你做一个模拟经营游戏')
     assert.deepEqual(result.providers, ['bing-rss'])
     assert.ok(seen.every((url) => url.includes('format=rss')))
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('a Bing 200 with an empty feed is retried once before being believed', async () => {
+  // The intermittent failure the audit observed: HTTP 200, zero parsable
+  // items. One short retry recovers it; the retry is visible in the notes.
+  const seen = stubBingSequence([bingFeed([]), bingFeed([{ title: 'Ref', url: 'https://ref.example/1' }])])
+  try {
+    const mounted = mount({ account: fakeAccount(undefined) })
+    const result = await research(mounted, '我需要你做一个模拟经营游戏', { bingEmptyRetryMs: 1, maxAngles: 1 })
+    assert.deepEqual(result.providers, ['bing-rss'])
+    assert.equal(seen.length, 2, 'exactly one retry was spent on the empty first read')
+    assert.ok(result.notes.includes('bing:retry'), result.notes.join(' '))
+    assert.equal(result.notes.includes('bing:empty'), false, 'the recovered read is not reported as empty')
+    assert.deepEqual(result.providerStats['bing-rss'], { calls: 2, empty: 0, failures: 0, retries: 1 })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('a Bing feed that stays empty reads as empty, with the retry recorded', async () => {
+  const seen = stubBingSequence([bingFeed([]), bingFeed([])])
+  try {
+    const mounted = mount({ account: fakeAccount(undefined) })
+    const result = await research(mounted, '我需要你做一个模拟经营游戏', { bingEmptyRetryMs: 1, maxAngles: 1 })
+    assert.equal(result.ok, false)
+    assert.equal(seen.length, 2, 'the retry did not loop')
+    assert.ok(result.notes.includes('bing:empty'), result.notes.join(' '))
+    assert.ok(result.notes.includes('bing:retry'), result.notes.join(' '))
+    assert.deepEqual(result.providerStats['bing-rss'], { calls: 2, empty: 1, failures: 0, retries: 1 })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('a Bing answer that is not an RSS document fails as malformed and is not retried', async () => {
+  // A consent interstitial or an HTML error page is a real failure, not "no
+  // results"; a second identical request would read the same page.
+  const seen = stubBingSequence(['<html><body>Before you continue to Bing</body></html>'])
+  try {
+    const mounted = mount({ account: fakeAccount(undefined) })
+    const result = await research(mounted, '我需要你做一个模拟经营游戏', { maxAngles: 1 })
+    assert.equal(result.ok, false)
+    assert.equal(seen.length, 1, 'a malformed body is not retried')
+    assert.ok(result.notes.includes('bing:BING_MALFORMED'), result.notes.join(' '))
+    assert.deepEqual(result.providerStats['bing-rss'], { calls: 1, empty: 0, failures: 1, retries: 0 })
   } finally {
     globalThis.fetch = originalFetch
   }

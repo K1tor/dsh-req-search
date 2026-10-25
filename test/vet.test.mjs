@@ -106,15 +106,41 @@ test('fetchAdvisories reports an empty list when nothing is known', async () => 
   assert.deepEqual(outcome.advisories, [])
 })
 
+test('regression: OSV answers a clean package with HTTP 200 and {}', async () => {
+  // Observed against the real API for left-pad@1.3.0: HTTP 200, body `{}`.
+  // That is a successful check with zero known advisories, not a fault.
+  const fetchImpl = async () => ({ ok: true, status: 200, async json() { return {} } })
+  const outcome = await fetchAdvisories('left-pad', { fetchImpl })
+  assert.equal(outcome.checked, true, 'an omitted vulns field is still a successful check')
+  assert.equal(outcome.reason, undefined, 'no unexpected-body is reported')
+  assert.deepEqual(outcome.advisories, [])
+  const verdict = await vetPackage('left-pad', {
+    fetchImpl: async (url) => (String(url).includes('osv.dev')
+      ? { ok: true, status: 200, async json() { return {} } }
+      : { ok: true, status: 200, async json() { return { name: 'left-pad', version: '1.3.0', license: 'MIT' } } }),
+  })
+  assert.equal(verdict.advisoriesChecked, true)
+  assert.equal(verdict.vulnerable, false, 'a clean check reads as safe, not as failed')
+  assert.equal(formatVerdict(verdict), 'MIT', 'the verdict does not claim the lookup failed')
+})
+
 test('fetchAdvisories distinguishes a failed lookup from a clean one', async () => {
   const httpError = async () => ({ ok: false, status: 503, async json() { return {} } })
   const failed = await fetchAdvisories('x', { fetchImpl: httpError })
   assert.equal(failed.checked, false)
   assert.equal(failed.reason, 'HTTP_503')
-  const badBody = async () => ({ ok: true, status: 200, async json() { return { unexpected: true } } })
-  const malformed = await fetchAdvisories('x', { fetchImpl: badBody })
+  const errorBody = async () => ({ ok: true, status: 200, async json() { return { error: 'invalid query' } } })
+  const errored = await fetchAdvisories('x', { fetchImpl: errorBody })
+  assert.equal(errored.checked, false)
+  assert.equal(errored.reason, 'unexpected-body')
+  const wrongType = async () => ({ ok: true, status: 200, async json() { return { vulns: null } } })
+  const malformed = await fetchAdvisories('x', { fetchImpl: wrongType })
   assert.equal(malformed.checked, false)
   assert.equal(malformed.reason, 'unexpected-body')
+  const topLevel = async () => ({ ok: true, status: 200, async json() { return [{ id: 'GHSA-1' }] } })
+  const arrayBody = await fetchAdvisories('x', { fetchImpl: topLevel })
+  assert.equal(arrayBody.checked, false)
+  assert.equal(arrayBody.reason, 'unexpected-body')
   const offline = async () => { throw new Error('fetch failed') }
   const unreachable = await fetchAdvisories('x', { fetchImpl: offline })
   assert.equal(unreachable.checked, false)

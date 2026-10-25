@@ -27,6 +27,25 @@ const cases = []
 const test = (name, fn) => cases.push([name, fn])
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * Remove one temp directory, tolerating the Windows race where a just-closed
+ * file handle keeps the directory busy for a beat. `force` alone does not
+ * cover ENOTEMPTY, so a short bounded retry does.
+ * @param {string} directory - the temp directory.
+ * @returns {Promise<void>} resolves once the directory is gone (or irrecoverable).
+ */
+async function removeTemp(directory) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rm(directory, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (attempt >= 4 || !/ENOTEMPTY|EPERM|EBUSY/u.test(String(error?.code ?? error))) throw error
+      await sleep(50)
+    }
+  }
+}
+
 /** Stub the GitHub metadata endpoint so enrichment is deterministic. */
 function stubFetch() {
   const original = globalThis.fetch
@@ -288,7 +307,7 @@ test('concurrent research in one project preserves every memory entry', async ()
     const left = await readdir(directory, { recursive: true })
     assert.ok(left.every((entry) => !entry.endsWith('.tmp')), 'no temp file was left behind')
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await removeTemp(directory)
   }
 })
 

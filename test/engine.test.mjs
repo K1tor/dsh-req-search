@@ -270,8 +270,34 @@ test('a changed project version invalidates the cache', async () => {
     const before = ctx.calls.length
     version = 'stamp-2'
     const second = await engine.research(request('写一个带鉴权的 REST API 服务'))
-    assert.equal(second.cached, undefined)
+    assert.equal(second.cached, false)
     assert.ok(ctx.calls.length > before, 'changed project files force a fresh search')
+  } finally {
+    restore()
+  }
+})
+
+test('a forced refresh re-fetches instead of replaying the cache', async () => {
+  const restore = stubFetch()
+  try {
+    const ctx = stubCtx()
+    const engine = engineFor({ ctx, config: { maxAngles: 1, deadlineMs: 4000 } })
+    const text = '写一个带鉴权的 REST API 服务'
+    const first = await engine.research(request(text))
+    assert.notEqual(first.cached, true)
+    const callsAfterFirst = ctx.calls.length
+    const refreshed = await engine.research(request(text, { forceRefresh: true }))
+    assert.equal(refreshed.cached, false, 'the refresh did not replay the cache')
+    assert.notEqual(refreshed.runId, first.runId)
+    assert.ok(ctx.calls.length > callsAfterFirst, 'the refresh spent new provider calls')
+    // The refresh is visible in the run record, not just in the outcome.
+    const record = engine.snapshot().recent.find((run) => run.id === refreshed.runId)
+    assert.ok(record.phases.some((phase) => phase.name === 'cache' && phase.state === 'skipped' && phase.reason === 'forced-refresh'))
+    // An ordinary repeat afterwards still reads the refreshed entry.
+    const callsAfterRefresh = ctx.calls.length
+    const repeat = await engine.research(request(text))
+    assert.equal(repeat.cached, true, 'a normal repeat is still served from cache')
+    assert.equal(ctx.calls.length, callsAfterRefresh, 'the repeat spent no provider calls')
   } finally {
     restore()
   }
@@ -428,6 +454,28 @@ test('capacity limits how many runs may be in flight', async () => {
     assert.equal(second.ok, true, 'the second run still completes')
     await first
     assert.equal(engine.hasCapacity, true)
+  } finally {
+    restore()
+  }
+})
+
+test('a queued run records its wait, and every run records provider facts', async () => {
+  const restore = stubFetch()
+  try {
+    const ctx = stubCtx({ delayMs: 40 })
+    const engine = engineFor({ ctx, config: { maxAngles: 1, maxInflight: 1, deadlineMs: 4000 } })
+    const [first, second] = await Promise.all([
+      engine.research(request('写一个带鉴权的 REST API 服务')),
+      engine.research(request('做一个管理后台的网页界面')),
+    ])
+    const records = new Map(engine.snapshot().recent.map((run) => [run.id, run]))
+    const firstRecord = records.get(first.runId)
+    const secondRecord = records.get(second.runId)
+    assert.equal(firstRecord.queueWaitMs, undefined, 'a run that started immediately waited for nothing')
+    assert.equal(typeof secondRecord.queueWaitMs, 'number', 'the queued run recorded its wait')
+    // The provider facts are read from the angles' own records: one consulted
+    // provider, no failures, no empties.
+    assert.deepEqual(firstRecord.providerStats, { 'ctx.web': { calls: 1, empty: 0, failures: 0, retries: 0 } })
   } finally {
     restore()
   }

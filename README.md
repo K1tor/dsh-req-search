@@ -89,7 +89,7 @@ DSH 不向 `agent/pre-step` 暴露 Token 计数器，因此预算全部是**可�
 | `contextChars` | 10000 | 注入消息与简报的字符上限 |
 | `maxSourceChars` | 500 | 单条来源摘要的字符上限 |
 | `maxInflight` | 2 | 全局并发上限；槽位在入口原子预留，超出的请求排队等待而不是突破上限 |
-| `cacheTtlMs` | 6h | 同项目同任务的结论复用；manifest/lockfile 变更、或新请求的检索预算更强时即失效 |
+| `cacheTtlMs` | 6h | 同项目同任务的结论复用；manifest/lockfile 变更、或新请求的检索预算更强时即失效。面板「重新执行」带 `forceRefresh`：不读缓存、真实重查，成功后用新结果覆盖该条目 |
 | `dedupe` | 开 | 相同任务（同文本**且同预算**）在飞时共享一次检索；更强请求独立检索，两个 Agent 各自记录交付 |
 
 ## 面板（观察者）
@@ -102,7 +102,8 @@ DSH 不向 `agent/pre-step` 暴露 Token 计数器，因此预算全部是**可�
 - 阶段时间线（`classify → cache → plan → angle:* → enrich → conclude`），每项带真实时间戳
 - 实际使用的来源、从来源提炼出的**结论**、是否注入本轮
 - 失败与被过滤的原因（`failures`、`dropped`）
-- 取消 / 重新执行（`/dsh-req-search/control`，同源校验）
+- 每个 provider 的真实计数（`providerStats`：读取次数 / 空结果 / 失败 / 重试）与排队等待时长（`queueWaitMs`）
+- 取消 / 重新执行（`/dsh-req-search/control`，同源校验）；重新执行强制重查（`cached=false`），不是回放缓存
 
 面板没有搜索框：引擎不需要你操作。样式决策（`ask_style`）仍然回到这里，因为那是该由人拍板的事。
 
@@ -118,7 +119,10 @@ DSH 不向 `agent/pre-step` 暴露 Token 计数器，因此预算全部是**可�
 ## 测试
 
 ```bash
-node test/all.mjs          # 13 个测试文件，共 183 个用例，无网络
+node test/all.mjs          # 14 个测试文件，共 190 个用例，无网络
+
+# 真实协议组（默认跳过；打真实 OSV / npm registry / Bing RSS）
+DSH_REQ_SEARCH_NET=1 node test/real-network.test.mjs
 ```
 
 其中 `test/hardening.test.mjs` 固化了 2026-10 安全与可靠性评审的回归矩阵：凭据在最终出站 query 中不可见、OSV 离线/5xx/异常 JSON 的三态上报、provider 无视 abort 时 deadline 仍收口、超时带部分来源不进缓存、并发记忆写入零丢失、fragment 变体不丢失角度来源、取消意图识别等。

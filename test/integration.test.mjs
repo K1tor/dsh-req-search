@@ -595,7 +595,9 @@ test('G3: the control route cancels and re-runs against the real engine', async 
   try {
     let release
     const gate = new Promise((resolve) => { release = resolve })
+    let calls = 0
     const search = async () => {
+      calls += 1
       await gate
       return { sources: [{ url: 'https://github.com/example/a', title: 'A' }], truncated: false }
     }
@@ -614,17 +616,30 @@ test('G3: the control route cancels and re-runs against the real engine', async 
     release()
     await running
 
-    // A completed run can be re-run through the same route.
+    // A *completed* run re-run through the same route must fetch again: the
+    // button promises a new search, not a replay of the cached answer. The
+    // scenario uses its own requirement so the cancelled run above cannot
+    // contribute a cache entry to it.
+    const first = await firePreStep(mounted, [userMessage('写一个带鉴权的 REST API 服务')], { agent: fakeAgent() })
+    assert.equal(researchMessages(first).length, 1)
+    const afterFirst = calls
     const completed = await call(mounted.routes.get(STATUS_PATH), fakeRequest({ method: 'GET' }))
-    const done = completed.body.recent[0]
-    assert.ok(done !== undefined)
-    release()
+    const done = completed.body.recent.find((run) => run.ok === true && /鉴权/u.test(run.requirement))
+    assert.ok(done !== undefined, 'the first pass completed')
     const rerun = await call(mounted.routes.get(CONTROL_PATH), fakeRequest({
       body: JSON.stringify({ action: 'rerun', id: done.id }),
     }))
     assert.equal(rerun.status, 200, rerun.raw)
     assert.equal(rerun.body.ok, true, rerun.raw)
     assert.notEqual(rerun.body.runId, done.id, 'the re-run is a new recorded run')
+    assert.equal(rerun.body.cached, false, 'the re-run did not replay the cache')
+    assert.equal(calls > afterFirst, true, `the re-run spent new provider calls (${afterFirst} -> ${calls})`)
+
+    // An ordinary repeat of the same requirement is still served from cache:
+    // the refreshed entry replaced the old one, and no provider call is spent.
+    const afterRerun = calls
+    await firePreStep(mounted, [userMessage('写一个带鉴权的 REST API 服务')], { agent: fakeAgent({ sessionId: 'repeat' }) })
+    assert.equal(calls, afterRerun, 'a normal repeat still reads the refreshed cache')
 
     const unknown = await call(mounted.routes.get(CONTROL_PATH), fakeRequest({
       body: JSON.stringify({ action: 'rerun', id: 'research-nope' }),
